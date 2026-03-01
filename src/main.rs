@@ -53,6 +53,7 @@ fn print_help() {
     println!("  /quit, /exit      Exit the agent");
     println!("  /clear            Clear conversation history");
     println!("  /model <name>     Switch model mid-session");
+    println!("  /status           Show session info");
     println!();
     println!("Environment:");
     println!("  ANTHROPIC_API_KEY  API key for Anthropic (required)");
@@ -196,7 +197,20 @@ async fn main() {
                 println!("{DIM}  /help          Show this help");
                 println!("  /quit, /exit   Exit yoyo");
                 println!("  /clear         Clear conversation history");
-                println!("  /model <name>  Switch model (clears conversation){RESET}\n");
+                println!("  /model <name>  Switch model (clears conversation)");
+                println!("  /status        Show session info{RESET}\n");
+                continue;
+            }
+            "/status" => {
+                println!("{DIM}  model:   {model}");
+                if let Some(branch) = git_branch() {
+                    println!("  git:     {branch}");
+                }
+                println!("  cwd:     {cwd}");
+                println!(
+                    "  tokens:  {} in / {} out (session total){RESET}\n",
+                    session_total.input, session_total.output
+                );
                 continue;
             }
             "/clear" => {
@@ -415,10 +429,10 @@ mod tests {
 
     #[test]
     fn test_command_help_recognized() {
-        let commands = ["/help", "/quit", "/exit", "/clear"];
+        let commands = ["/help", "/quit", "/exit", "/clear", "/status"];
         for cmd in &commands {
             assert!(
-                ["/help", "/quit", "/exit", "/clear"].contains(cmd),
+                ["/help", "/quit", "/exit", "/clear", "/status"].contains(cmd),
                 "Command not recognized: {cmd}"
             );
         }
