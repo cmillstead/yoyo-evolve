@@ -69,8 +69,16 @@ fn print_banner() {
 
 fn print_usage(usage: &Usage, total: &Usage) {
     if usage.input > 0 || usage.output > 0 {
+        let cache_info = if usage.cache_read > 0 || usage.cache_write > 0 {
+            format!(
+                "  [cache: {} read, {} write]",
+                usage.cache_read, usage.cache_write
+            )
+        } else {
+            String::new()
+        };
         println!(
-            "\n{DIM}  tokens: {} in / {} out  (session: {} in / {} out){RESET}",
+            "\n{DIM}  tokens: {} in / {} out{cache_info}  (session: {} in / {} out){RESET}",
             usage.input, usage.output, total.input, total.output
         );
     }
@@ -268,36 +276,7 @@ async fn run_prompt(agent: &mut Agent, input: &str, session_total: &mut Usage) {
                             println!();
                             in_text = false;
                         }
-                        let summary = match tool_name.as_str() {
-                            "bash" => {
-                                let cmd = args
-                                    .get("command")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("...");
-                                format!("$ {}", truncate_with_ellipsis(cmd, 80))
-                            }
-                            "read_file" => {
-                                let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("?");
-                                format!("read {}", path)
-                            }
-                            "write_file" => {
-                                let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("?");
-                                format!("write {}", path)
-                            }
-                            "edit_file" => {
-                                let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("?");
-                                format!("edit {}", path)
-                            }
-                            "list_files" => {
-                                let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-                                format!("ls {}", path)
-                            }
-                            "search" => {
-                                let pat = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("?");
-                                format!("search '{}'", truncate_with_ellipsis(pat, 60))
-                            }
-                            _ => tool_name.clone(),
-                        };
+                        let summary = format_tool_summary(&tool_name, &args);
                         print!("{YELLOW}  ▶ {summary}{RESET}");
                         io::stdout().flush().ok();
                     }
@@ -319,6 +298,14 @@ async fn run_prompt(agent: &mut Agent, input: &str, session_total: &mut Usage) {
                         print!("{}", delta);
                         io::stdout().flush().ok();
                     }
+                    AgentEvent::MessageUpdate {
+                        delta: StreamDelta::Thinking { delta },
+                        ..
+                    } => {
+                        // Show thinking output dimmed so user can follow the reasoning
+                        print!("{DIM}{delta}{RESET}");
+                        io::stdout().flush().ok();
+                    }
                     AgentEvent::AgentEnd { messages } => {
                         // Sum usage across ALL assistant messages in this turn
                         // (a single prompt can trigger multiple LLM calls via tool loops)
@@ -326,6 +313,8 @@ async fn run_prompt(agent: &mut Agent, input: &str, session_total: &mut Usage) {
                             if let AgentMessage::Llm(Message::Assistant { usage, .. }) = msg {
                                 last_usage.input += usage.input;
                                 last_usage.output += usage.output;
+                                last_usage.cache_read += usage.cache_read;
+                                last_usage.cache_write += usage.cache_write;
                             }
                         }
                     }
@@ -333,10 +322,12 @@ async fn run_prompt(agent: &mut Agent, input: &str, session_total: &mut Usage) {
                 }
             }
             _ = tokio::signal::ctrl_c() => {
+                // Cancel the agent's background work (tool execution, API calls)
+                agent.abort();
                 if in_text {
                     println!();
                 }
-                println!("\n{DIM}  (interrupted){RESET}");
+                println!("\n{DIM}  (interrupted — press Ctrl+C again to exit){RESET}");
                 break;
             }
         }
@@ -347,8 +338,47 @@ async fn run_prompt(agent: &mut Agent, input: &str, session_total: &mut Usage) {
     }
     session_total.input += last_usage.input;
     session_total.output += last_usage.output;
+    session_total.cache_read += last_usage.cache_read;
+    session_total.cache_write += last_usage.cache_write;
     print_usage(&last_usage, session_total);
     println!();
+}
+
+/// Format a human-readable summary for a tool execution.
+fn format_tool_summary(tool_name: &str, args: &serde_json::Value) -> String {
+    match tool_name {
+        "bash" => {
+            let cmd = args
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("...");
+            format!("$ {}", truncate_with_ellipsis(cmd, 80))
+        }
+        "read_file" => {
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+            format!("read {}", path)
+        }
+        "write_file" => {
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+            format!("write {}", path)
+        }
+        "edit_file" => {
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+            format!("edit {}", path)
+        }
+        "list_files" => {
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+            format!("ls {}", path)
+        }
+        "search" => {
+            let pat = args
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            format!("search '{}'", truncate_with_ellipsis(pat, 60))
+        }
+        _ => tool_name.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -456,6 +486,64 @@ mod tests {
         assert_eq!(truncate_with_ellipsis("hello world", 5), "hello…");
         assert_eq!(truncate_with_ellipsis("hi", 5), "hi");
         assert_eq!(truncate_with_ellipsis("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_format_tool_summary_bash() {
+        let args = serde_json::json!({"command": "echo hello"});
+        assert_eq!(format_tool_summary("bash", &args), "$ echo hello");
+    }
+
+    #[test]
+    fn test_format_tool_summary_bash_long_command() {
+        let long_cmd = "a".repeat(100);
+        let args = serde_json::json!({"command": long_cmd});
+        let result = format_tool_summary("bash", &args);
+        assert!(result.starts_with("$ "));
+        assert!(result.ends_with('…'));
+        assert!(result.len() < 100); // truncated
+    }
+
+    #[test]
+    fn test_format_tool_summary_read_file() {
+        let args = serde_json::json!({"path": "src/main.rs"});
+        assert_eq!(format_tool_summary("read_file", &args), "read src/main.rs");
+    }
+
+    #[test]
+    fn test_format_tool_summary_write_file() {
+        let args = serde_json::json!({"path": "out.txt"});
+        assert_eq!(format_tool_summary("write_file", &args), "write out.txt");
+    }
+
+    #[test]
+    fn test_format_tool_summary_edit_file() {
+        let args = serde_json::json!({"path": "foo.rs"});
+        assert_eq!(format_tool_summary("edit_file", &args), "edit foo.rs");
+    }
+
+    #[test]
+    fn test_format_tool_summary_list_files() {
+        let args = serde_json::json!({"path": "src/"});
+        assert_eq!(format_tool_summary("list_files", &args), "ls src/");
+    }
+
+    #[test]
+    fn test_format_tool_summary_list_files_no_path() {
+        let args = serde_json::json!({});
+        assert_eq!(format_tool_summary("list_files", &args), "ls .");
+    }
+
+    #[test]
+    fn test_format_tool_summary_search() {
+        let args = serde_json::json!({"pattern": "TODO"});
+        assert_eq!(format_tool_summary("search", &args), "search 'TODO'");
+    }
+
+    #[test]
+    fn test_format_tool_summary_unknown_tool() {
+        let args = serde_json::json!({});
+        assert_eq!(format_tool_summary("custom_tool", &args), "custom_tool");
     }
 
     #[test]
