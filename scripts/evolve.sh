@@ -56,7 +56,17 @@ RECENT_JOURNAL=$(head -200 JOURNAL.md 2>/dev/null || echo "No journal yet.")
 echo "→ Starting evolution session..."
 echo ""
 
-timeout "$TIMEOUT" cargo run -- \
+# Use gtimeout (brew install coreutils) on macOS, timeout on Linux
+TIMEOUT_CMD="timeout"
+if ! command -v timeout &>/dev/null; then
+    if command -v gtimeout &>/dev/null; then
+        TIMEOUT_CMD="gtimeout"
+    else
+        TIMEOUT_CMD=""
+    fi
+fi
+
+${TIMEOUT_CMD:+$TIMEOUT_CMD "$TIMEOUT"} cargo run -- \
     --model "$MODEL" \
     --skills ./skills \
     <<PROMPT || true
