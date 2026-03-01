@@ -380,13 +380,34 @@ async fn run_prompt(agent: &mut Agent, input: &str, session_total: &mut Usage) {
                         // Sum usage across ALL assistant messages in this turn
                         // (a single prompt can trigger multiple LLM calls via tool loops)
                         for msg in &messages {
-                            if let AgentMessage::Llm(Message::Assistant { usage, .. }) = msg {
+                            if let AgentMessage::Llm(Message::Assistant { usage, stop_reason, error_message, .. }) = msg {
                                 last_usage.input += usage.input;
                                 last_usage.output += usage.output;
                                 last_usage.cache_read += usage.cache_read;
                                 last_usage.cache_write += usage.cache_write;
+
+                                // Show error stop reasons to the user
+                                if *stop_reason == StopReason::Error {
+                                    if let Some(err_msg) = error_message {
+                                        if in_text {
+                                            println!();
+                                            in_text = false;
+                                        }
+                                        eprintln!("\n{RED}  error: {err_msg}{RESET}");
+                                    }
+                                }
                             }
                         }
+                    }
+                    AgentEvent::InputRejected { reason } => {
+                        eprintln!("{RED}  input rejected: {reason}{RESET}");
+                    }
+                    AgentEvent::ProgressMessage { text, .. } => {
+                        if in_text {
+                            println!();
+                            in_text = false;
+                        }
+                        println!("{DIM}  {text}{RESET}");
                     }
                     _ => {}
                 }
