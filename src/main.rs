@@ -803,7 +803,7 @@ mod tests {
     #[test]
     fn test_system_flag_parsing() {
         // --system "custom prompt" should be extracted from args
-        let args = vec![
+        let args = [
             "yoyo".to_string(),
             "--system".to_string(),
             "You are a Rust expert.".to_string(),
@@ -818,7 +818,7 @@ mod tests {
 
     #[test]
     fn test_system_flag_missing() {
-        let args = vec!["yoyo".to_string()];
+        let args = ["yoyo".to_string()];
         let system = args
             .iter()
             .position(|a| a == "--system")
@@ -830,7 +830,7 @@ mod tests {
     #[test]
     fn test_system_file_flag() {
         // --system-file path should read from file
-        let args = vec![
+        let args = [
             "yoyo".to_string(),
             "--system-file".to_string(),
             "prompt.txt".to_string(),
