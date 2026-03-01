@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A self-evolving coding agent CLI built on [yoagent](https://github.com/yologdev/yoagent). The entire agent lives in `src/main.rs` (~230 lines of Rust). A daily GitHub Actions cron job (`scripts/evolve.sh`) runs the agent, which reads its own source, picks one improvement, implements it, and commits — if tests pass.
+A self-evolving coding agent CLI built on [yoagent](https://github.com/yologdev/yoagent). The entire agent lives in `src/main.rs` (~230 lines of Rust). A GitHub Actions cron job (`scripts/evolve.sh`) runs the agent every 4 hours, which reads its own source, picks improvements, implements them, and commits — if tests pass.
 
 ## Build & Test Commands
 
@@ -35,15 +35,14 @@ ANTHROPIC_API_KEY=sk-... ./scripts/evolve.sh
 
 **Evolution loop** (`scripts/evolve.sh`): Verifies build → fetches GitHub issues (via `gh` CLI + `scripts/format_issues.py`) → pipes a structured prompt into the agent → verifies build after changes → commits or reverts → posts issue responses → pushes.
 
-**Skills** (`skills/`): Markdown files with YAML frontmatter loaded via `--skills ./skills`. Three skills define the agent's daily workflow:
+**Skills** (`skills/`): Markdown files with YAML frontmatter loaded via `--skills ./skills`. Three skills define the agent's evolution workflow:
 - `self-assess` — read own code, try tasks, find bugs/gaps
 - `evolve` — safely modify source, test, revert on failure
 - `communicate` — write journal entries and issue responses
 
 **State files** (read/written by the agent during evolution):
 - `IDENTITY.md` — the agent's constitution and rules (DO NOT MODIFY)
-- `JOURNAL.md` — chronological log of daily sessions (append at top, never delete)
-- `ROADMAP.md` — leveled curriculum of planned improvements
+- `JOURNAL.md` — chronological log of evolution sessions (append at top, never delete)
 - `LEARNINGS.md` — cached knowledge from internet lookups
 - `DAY_COUNT` — integer tracking current evolution day
 - `ISSUES_TODAY.md` — ephemeral, generated during evolution from GitHub issues (gitignored)

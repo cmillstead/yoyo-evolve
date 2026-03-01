@@ -1,4 +1,4 @@
-name: Daily Evolution
+name: Evolution
 
 on:
   schedule:

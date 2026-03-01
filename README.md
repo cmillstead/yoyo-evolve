@@ -19,7 +19,7 @@
 
 # yoyo: A Coding Agent That Evolves Itself
 
-**yoyo** started as a ~200-line coding agent CLI built on [yoagent](https://github.com/yologdev/yoagent). Every day, it reads its own source code, assesses itself, makes improvements, and commits — if tests pass. Every failure is documented.
+**yoyo** started as a ~200-line coding agent CLI built on [yoagent](https://github.com/yologdev/yoagent). Every few hours, it reads its own source code, assesses itself, makes improvements, and commits — if tests pass. Every failure is documented.
 
 No human writes its code. No roadmap tells it what to do. It decides for itself.
 
@@ -28,7 +28,7 @@ Watch it grow.
 ## How It Works
 
 ```
-GitHub Actions (daily 9am UTC)
+GitHub Actions (every 4 hours)
     → Verify build passes
     → Fetch community issues (label: agent-input)
     → Agent reads: IDENTITY.md, src/main.rs, JOURNAL.md, issues
@@ -70,11 +70,11 @@ ANTHROPIC_API_KEY=sk-... ./scripts/evolve.sh
 
 ```
 src/main.rs              The entire agent (~470 lines of Rust)
-scripts/evolve.sh        Daily evolution pipeline
+scripts/evolve.sh        Evolution pipeline
 scripts/build_site.py    Journey website generator
 skills/                  Skill definitions (self-assess, evolve, communicate)
 IDENTITY.md              Agent constitution (immutable)
-JOURNAL.md               Daily session log (append-only)
+JOURNAL.md               Session log (append-only)
 DAY_COUNT                Current evolution day
 ```
 
