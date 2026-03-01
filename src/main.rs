@@ -54,6 +54,8 @@ fn print_help() {
     println!("  /clear            Clear conversation history");
     println!("  /model <name>     Switch model mid-session");
     println!("  /status           Show session info");
+    println!("  /save [path]      Save session to file");
+    println!("  /load [path]      Load session from file");
     println!();
     println!("Environment:");
     println!("  ANTHROPIC_API_KEY  API key for Anthropic (required)");
@@ -210,11 +212,13 @@ async fn main() {
         match input {
             "/quit" | "/exit" => break,
             "/help" => {
-                println!("{DIM}  /help          Show this help");
-                println!("  /quit, /exit   Exit yoyo");
-                println!("  /clear         Clear conversation history");
-                println!("  /model <name>  Switch model (clears conversation)");
-                println!("  /status        Show session info");
+                println!("{DIM}  /help              Show this help");
+                println!("  /quit, /exit       Exit yoyo");
+                println!("  /clear             Clear conversation history");
+                println!("  /model <name>      Switch model (clears conversation)");
+                println!("  /status            Show session info");
+                println!("  /save [path]       Save session to file (default: yoyo-session.json)");
+                println!("  /load [path]       Load session from file");
                 println!();
                 println!("  Multi-line input:");
                 println!("  End a line with \\ to continue on the next line");
@@ -243,6 +247,44 @@ async fn main() {
                 model = new_model.to_string();
                 agent = build_agent(&model, &api_key, &skills);
                 println!("{DIM}  (switched to {new_model}, conversation cleared){RESET}\n");
+                continue;
+            }
+            s if s.starts_with("/save") => {
+                let path = s.strip_prefix("/save").unwrap_or("").trim();
+                let path = if path.is_empty() {
+                    "yoyo-session.json"
+                } else {
+                    path
+                };
+                match agent.save_messages() {
+                    Ok(json) => match std::fs::write(path, &json) {
+                        Ok(_) => println!(
+                            "{DIM}  (session saved to {path}, {} messages){RESET}\n",
+                            agent.messages().len()
+                        ),
+                        Err(e) => eprintln!("{RED}  error saving: {e}{RESET}\n"),
+                    },
+                    Err(e) => eprintln!("{RED}  error serializing: {e}{RESET}\n"),
+                }
+                continue;
+            }
+            s if s.starts_with("/load") => {
+                let path = s.strip_prefix("/load").unwrap_or("").trim();
+                let path = if path.is_empty() {
+                    "yoyo-session.json"
+                } else {
+                    path
+                };
+                match std::fs::read_to_string(path) {
+                    Ok(json) => match agent.restore_messages(&json) {
+                        Ok(_) => println!(
+                            "{DIM}  (session loaded from {path}, {} messages){RESET}\n",
+                            agent.messages().len()
+                        ),
+                        Err(e) => eprintln!("{RED}  error parsing: {e}{RESET}\n"),
+                    },
+                    Err(e) => eprintln!("{RED}  error reading {path}: {e}{RESET}\n"),
+                }
                 continue;
             }
             _ => {}
@@ -552,10 +594,10 @@ mod tests {
 
     #[test]
     fn test_command_help_recognized() {
-        let commands = ["/help", "/quit", "/exit", "/clear", "/status"];
+        let commands = ["/help", "/quit", "/exit", "/clear", "/status", "/save", "/load"];
         for cmd in &commands {
             assert!(
-                ["/help", "/quit", "/exit", "/clear", "/status"].contains(cmd),
+                ["/help", "/quit", "/exit", "/clear", "/status", "/save", "/load"].contains(cmd),
                 "Command not recognized: {cmd}"
             );
         }
