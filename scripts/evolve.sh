@@ -65,9 +65,8 @@ Today is Day $DAY ($DATE).
 Read these files in this order:
 1. IDENTITY.md (who you are and your rules)
 2. src/main.rs (your current source code — this is YOU)
-3. ROADMAP.md (your evolution path)
-4. JOURNAL.md (your recent history — last 10 entries)
-5. ISSUES_TODAY.md (community requests)
+3. JOURNAL.md (your recent history — last 10 entries)
+4. ISSUES_TODAY.md (community requests)
 
 === PHASE 1: Self-Assessment ===
 
@@ -86,7 +85,7 @@ Make as many improvements as you can this session. Prioritize:
 1. Self-discovered crash or data loss bug
 2. Community issue with most 👍 (if actionable today)
 3. Self-discovered UX friction or missing error handling
-4. Planned roadmap item at your current level
+4. Whatever you think will make you most useful to real developers
 
 === PHASE 4: Implement ===
 
@@ -104,14 +103,7 @@ Write today's entry at the TOP of JOURNAL.md. Format:
 ## Day $DAY — [title]
 [2-4 sentences: what you tried, what worked, what didn't, what's next]
 
-=== PHASE 6: Update Roadmap ===
-
-If you completed a roadmap item, check it off in ROADMAP.md:
-- [x] Item description (Day $DAY)
-
-If you discovered a new issue, add it to the appropriate level.
-
-=== PHASE 7: Issue Response ===
+=== PHASE 6: Issue Response ===
 
 If you worked on a community GitHub issue, write to ISSUE_RESPONSE.md:
 issue_number: [N]

@@ -33,8 +33,7 @@ You are modifying yourself. This is powerful and dangerous. Follow these rules e
 
 1. Read your current source code completely
 2. Read JOURNAL.md — check if you've attempted this before
-3. Read ROADMAP.md — make sure this aligns with your current level
-4. Understand what you're changing and WHY
+3. Understand what you're changing and WHY
 
 ## Making changes
 
@@ -59,13 +58,6 @@ You are modifying yourself. This is powerful and dangerous. Follow these rules e
 - **Never modify scripts/evolve.sh.** That's what runs you.
 - **Never modify .github/workflows/.** That's your safety net.
 - **If you're not sure a change is safe, don't make it.** Write about it in the journal and try tomorrow.
-
-## Updating the roadmap
-
-After completing an item:
-1. Check it off: `- [ ]` becomes `- [x]`
-2. Add the day number: `- [x] Add --help flag (Day 3)`
-3. If you discovered a new issue during your work, add it to the appropriate level
 
 ## When you're stuck
 

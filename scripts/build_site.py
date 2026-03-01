@@ -46,40 +46,6 @@ def parse_journal(content):
     return entries
 
 
-def parse_roadmap(content):
-    levels = []
-    chunks = re.split(r"^## ", content, flags=re.MULTILINE)
-    for chunk in chunks:
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-        lines = chunk.split("\n")
-        title = lines[0].strip()
-        desc_lines = []
-        items = []
-        for line in lines[1:]:
-            m = re.match(r"^- \[([ x])\] (.+)$", line)
-            if m:
-                items.append({"done": m.group(1) == "x", "text": m.group(2)})
-            elif line.strip() and not items:
-                desc_lines.append(line.strip())
-        if not items:
-            continue
-        total = len(items)
-        done = sum(1 for i in items if i["done"])
-        progress = (done / total * 100) if total else 0
-        levels.append(
-            {
-                "title": title,
-                "desc": " ".join(desc_lines),
-                "items": items,
-                "done": done,
-                "total": total,
-                "progress": progress,
-            }
-        )
-    return levels
-
 
 def parse_identity(content):
     intro_lines = []
@@ -139,38 +105,6 @@ def render_journal(entries):
     return "\n".join(parts)
 
 
-def render_roadmap(levels):
-    if not levels:
-        return '<p class="text-dim">No roadmap yet.</p>'
-    parts = []
-    for level in levels:
-        items_html = ""
-        for item in level["items"]:
-            cls = "item done" if item["done"] else "item"
-            check = "\u25a0" if item["done"] else "\u25a1"
-            check_cls = "check-done" if item["done"] else "check-todo"
-            items_html += (
-                f'          <div class="{cls}">'
-                f'<span class="{check_cls}">{check}</span> '
-                f'{md_inline(item["text"])}</div>\n'
-            )
-        pct = f"{level['progress']:.0f}"
-        parts.append(
-            f'      <div class="level">\n'
-            f'        <div class="level-header">\n'
-            f"          <h3>{md_inline(level['title'])}</h3>\n"
-            f'          <span class="level-pct">{pct}%</span>\n'
-            f"        </div>\n"
-            f'        <div class="progress-track">'
-            f'<div class="progress-fill" style="width:{pct}%"></div></div>\n'
-            f'        <p class="level-desc">{md_inline(level["desc"])}</p>\n'
-            f'        <div class="level-items">\n'
-            f"{items_html}"
-            f"        </div>\n"
-            f"      </div>"
-        )
-    return "\n".join(parts)
-
 
 def render_identity(identity):
     parts = []
@@ -210,7 +144,6 @@ HTML_TEMPLATE = """\
     <a href="#" class="nav-name">yoyo</a>
     <div class="nav-links">
       <a href="#journal">journal</a>
-      <a href="#roadmap">roadmap</a>
       <a href="#identity">identity</a>
       <a href="https://github.com/yologdev/yoyo-evolve" target="_blank" rel="noopener">github \u2197</a>
     </div>
@@ -228,11 +161,6 @@ HTML_TEMPLATE = """\
       <div class="timeline">
 {journal_html}
       </div>
-    </section>
-
-    <section id="roadmap">
-      <h2 class="section-label">// roadmap</h2>
-{roadmap_html}
     </section>
 
     <section id="identity">
@@ -477,78 +405,6 @@ section {
 }
 
 
-/* ── roadmap ── */
-
-.level {
-  margin-bottom: 2.5rem;
-}
-
-.level-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 0.4rem;
-}
-
-.level h3 {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-bright);
-}
-
-.level-pct {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  font-weight: 300;
-}
-
-.progress-track {
-  height: 3px;
-  background: var(--border);
-  margin-bottom: 0.75rem;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--green);
-  box-shadow: 0 0 8px rgba(52, 211, 153, 0.3);
-}
-
-.level-desc {
-  font-size: 0.8rem;
-  color: var(--text-dim);
-  margin-bottom: 0.75rem;
-}
-
-.level-items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.item {
-  font-size: 0.8rem;
-  color: var(--text);
-  line-height: 1.6;
-}
-
-.item.done {
-  color: var(--text-dim);
-  text-decoration: line-through;
-}
-
-.check-done {
-  color: var(--green);
-  margin-right: 0.3rem;
-}
-
-.check-todo {
-  color: var(--border);
-  margin-right: 0.3rem;
-}
-
-
 /* ── identity ── */
 
 .mission {
@@ -650,13 +506,11 @@ def build():
         pass
 
     journal_html = render_journal(parse_journal(read_file("JOURNAL.md")))
-    roadmap_html = render_roadmap(parse_roadmap(read_file("ROADMAP.md")))
     identity_html = render_identity(parse_identity(read_file("IDENTITY.md")))
 
     page = HTML_TEMPLATE.format(
         day_count=day_count,
         journal_html=journal_html,
-        roadmap_html=roadmap_html,
         identity_html=identity_html,
     )
 
