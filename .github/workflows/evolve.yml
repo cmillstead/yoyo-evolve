@@ -12,7 +12,7 @@ permissions:
 jobs:
   evolve:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 150
 
     steps:
       - name: Checkout
@@ -46,6 +46,8 @@ jobs:
           git config user.email "yoagent-evolve[bot]@users.noreply.github.com"
 
       - name: Run evolution session
+        id: attempt1
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           REPO: ${{ github.repository }}
@@ -54,5 +56,30 @@ jobs:
           chmod +x scripts/evolve.sh
           ./scripts/evolve.sh
 
+      - name: Retry after 15min
+        id: attempt2
+        if: steps.attempt1.outcome == 'failure'
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Waiting 15 minutes before retry..."
+          sleep 900
+          ./scripts/evolve.sh
+
+      - name: Retry after 45min
+        if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Waiting 45 minutes before retry..."
+          sleep 2700
+          ./scripts/evolve.sh
+
       - name: Check for clippy warnings
+        if: always()
         run: cargo clippy --quiet --all-targets 2>&1 || true

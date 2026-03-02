@@ -166,28 +166,20 @@ Now begin. Read IDENTITY.md first.
 PROMPT
 
 AGENT_LOG=$(mktemp)
-MAX_RETRIES=3
-for ATTEMPT in $(seq 1 $MAX_RETRIES); do
-    ${TIMEOUT_CMD:+$TIMEOUT_CMD "$TIMEOUT"} cargo run -- \
-        --model "$MODEL" \
-        --skills ./skills \
-        < "$PROMPT_FILE" 2>&1 | tee "$AGENT_LOG" || true
+${TIMEOUT_CMD:+$TIMEOUT_CMD "$TIMEOUT"} cargo run -- \
+    --model "$MODEL" \
+    --skills ./skills \
+    < "$PROMPT_FILE" 2>&1 | tee "$AGENT_LOG" || true
 
-    # Check if the agent actually did work (made commits) or hit an API error
-    if grep -q '"type":"error"' "$AGENT_LOG"; then
-        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
-            WAIT=$((ATTEMPT * 1800))
-            echo "  API error (attempt $ATTEMPT/$MAX_RETRIES). Retrying in ${WAIT}s..."
-            sleep "$WAIT"
-        else
-            echo "  API error persisted after $MAX_RETRIES attempts."
-        fi
-    else
-        break
-    fi
-done
+rm -f "$PROMPT_FILE"
 
-rm -f "$PROMPT_FILE" "$AGENT_LOG"
+# Exit early on API errors — GitHub Actions will handle retries
+if grep -q '"type":"error"' "$AGENT_LOG"; then
+    echo "  API error detected. Exiting for retry."
+    rm -f "$AGENT_LOG"
+    exit 1
+fi
+rm -f "$AGENT_LOG"
 
 echo ""
 echo "→ Session complete. Checking results..."
