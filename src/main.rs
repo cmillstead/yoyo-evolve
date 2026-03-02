@@ -296,10 +296,27 @@ async fn main() {
                 // If we add non-Anthropic providers later, this will need updating.
                 let max_context: u64 = 200_000;
 
-                let total_used = session_total.input + session_total.output;
-                let bar = context_bar(total_used, max_context);
+                // Estimate actual context window usage from message history
+                let messages = agent.messages().to_vec();
+                let context_used = total_tokens(&messages) as u64;
+                let bar = context_bar(context_used, max_context);
 
-                println!("{DIM}  Context usage:");
+                println!("{DIM}  Context window:");
+                println!(
+                    "    messages:    {}",
+                    messages.len()
+                );
+                println!(
+                    "    context:     {} / {} tokens",
+                    format_token_count(context_used),
+                    format_token_count(max_context)
+                );
+                println!("    {bar}");
+                if context_used as f64 / max_context as f64 > 0.75 {
+                    println!("    {YELLOW}⚠ Context is getting full. Consider /clear or /compact.{RESET}");
+                }
+                println!();
+                println!("  Session totals:");
                 println!(
                     "    input:       {} tokens",
                     format_token_count(session_total.input)
@@ -316,15 +333,6 @@ async fn main() {
                     "    cache write: {} tokens",
                     format_token_count(session_total.cache_write)
                 );
-                println!(
-                    "    total:       {} / {} tokens",
-                    format_token_count(total_used),
-                    format_token_count(max_context)
-                );
-                println!("    {bar}");
-                if total_used as f64 / max_context as f64 > 0.75 {
-                    println!("    {YELLOW}⚠ Context is getting full. Consider /clear or /compact.{RESET}");
-                }
                 println!("{RESET}");
                 continue;
             }
