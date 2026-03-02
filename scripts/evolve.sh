@@ -165,10 +165,23 @@ to LEARNINGS.md.
 Now begin. Read IDENTITY.md first.
 PROMPT
 
-${TIMEOUT_CMD:+$TIMEOUT_CMD "$TIMEOUT"} cargo run -- \
-    --model "$MODEL" \
-    --skills ./skills \
-    < "$PROMPT_FILE" || true
+MAX_RETRIES=3
+for ATTEMPT in $(seq 1 $MAX_RETRIES); do
+    if ${TIMEOUT_CMD:+$TIMEOUT_CMD "$TIMEOUT"} cargo run -- \
+        --model "$MODEL" \
+        --skills ./skills \
+        < "$PROMPT_FILE"; then
+        break
+    else
+        if [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; then
+            WAIT=$((ATTEMPT * 1800))
+            echo "  Agent failed (attempt $ATTEMPT/$MAX_RETRIES). Retrying in ${WAIT}s..."
+            sleep "$WAIT"
+        else
+            echo "  Agent failed after $MAX_RETRIES attempts."
+        fi
+    fi
+done
 
 rm -f "$PROMPT_FILE"
 
