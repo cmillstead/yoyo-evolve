@@ -7,6 +7,27 @@ use std::time::Instant;
 use yoagent::agent::Agent;
 use yoagent::*;
 
+/// Extract a preview of tool result content for display.
+/// Returns an empty string if there's nothing meaningful to show.
+fn tool_result_preview(result: &ToolResult, max_chars: usize) -> String {
+    let text: String = result
+        .content
+        .iter()
+        .filter_map(|c| match c {
+            Content::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let text = text.trim();
+    if text.is_empty() {
+        return String::new();
+    }
+    // Take first line only, truncated
+    let first_line = text.lines().next().unwrap_or("");
+    truncate_with_ellipsis(first_line, max_chars)
+}
+
 /// Write response text to a file if --output was specified.
 pub fn write_output_file(path: &Option<String>, text: &str) {
     if let Some(path) = path {
@@ -100,7 +121,7 @@ pub async fn run_prompt(
                         print!("{YELLOW}  ▶ {summary}{RESET}");
                         io::stdout().flush().ok();
                     }
-                    AgentEvent::ToolExecutionEnd { tool_call_id, is_error, .. } => {
+                    AgentEvent::ToolExecutionEnd { tool_call_id, is_error, result, .. } => {
                         let duration = tool_timers
                             .remove(&tool_call_id)
                             .map(|start| format_duration(start.elapsed()));
@@ -109,6 +130,11 @@ pub async fn run_prompt(
                             .unwrap_or_default();
                         if is_error {
                             println!(" {RED}✗{RESET}{dur_str}");
+                            // Show error preview so user can see what went wrong
+                            let preview = tool_result_preview(&result, 200);
+                            if !preview.is_empty() {
+                                println!("{DIM}    {preview}{RESET}");
+                            }
                         } else {
                             println!(" {GREEN}✓{RESET}{dur_str}");
                         }
@@ -254,5 +280,49 @@ mod tests {
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, "hello from yoyo");
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_tool_result_preview_empty() {
+        let result = ToolResult {
+            content: vec![],
+            details: serde_json::json!(null),
+        };
+        assert_eq!(tool_result_preview(&result, 100), "");
+    }
+
+    #[test]
+    fn test_tool_result_preview_text() {
+        let result = ToolResult {
+            content: vec![Content::Text {
+                text: "error: file not found".into(),
+            }],
+            details: serde_json::json!(null),
+        };
+        assert_eq!(tool_result_preview(&result, 100), "error: file not found");
+    }
+
+    #[test]
+    fn test_tool_result_preview_truncated() {
+        let result = ToolResult {
+            content: vec![Content::Text {
+                text: "a".repeat(200),
+            }],
+            details: serde_json::json!(null),
+        };
+        let preview = tool_result_preview(&result, 50);
+        assert!(preview.len() < 100);
+        assert!(preview.ends_with('…'));
+    }
+
+    #[test]
+    fn test_tool_result_preview_multiline() {
+        let result = ToolResult {
+            content: vec![Content::Text {
+                text: "first line\nsecond line\nthird line".into(),
+            }],
+            details: serde_json::json!(null),
+        };
+        assert_eq!(tool_result_preview(&result, 100), "first line");
     }
 }
