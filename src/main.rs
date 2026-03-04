@@ -538,8 +538,9 @@ async fn main() {
                 }
                 continue;
             }
-            s if s.starts_with('/') && !s.contains(' ') => {
-                eprintln!("{RED}  unknown command: {s}{RESET}");
+            s if s.starts_with('/') && is_unknown_command(s) => {
+                let cmd = s.split_whitespace().next().unwrap_or(s);
+                eprintln!("{RED}  unknown command: {cmd}{RESET}");
                 eprintln!("{DIM}  type /help for available commands{RESET}\n");
                 continue;
             }
@@ -691,6 +692,19 @@ fn git_branch() -> Option<String> {
                 None
             }
         })
+}
+
+/// Known REPL command prefixes. Used to detect unknown slash commands.
+const KNOWN_COMMANDS: &[&str] = &[
+    "/help", "/quit", "/exit", "/clear", "/compact", "/status", "/tokens", "/save", "/load",
+    "/diff", "/undo", "/retry", "/history", "/model", "/config",
+];
+
+/// Check if a slash-prefixed input is an unknown command.
+/// Extracts the first word and checks against known commands.
+fn is_unknown_command(input: &str) -> bool {
+    let cmd = input.split_whitespace().next().unwrap_or(input);
+    !KNOWN_COMMANDS.contains(&cmd)
 }
 
 /// Check if a line needs continuation (backslash at end, or opens a code fence).
@@ -1427,19 +1441,21 @@ mod tests {
 
     #[test]
     fn test_unknown_slash_command_detection() {
-        // Slash commands without spaces that don't match known commands should be caught
-        let unknown = "/foo";
-        assert!(unknown.starts_with('/') && !unknown.contains(' '));
+        // Unknown commands should be detected
+        assert!(is_unknown_command("/foo"));
+        assert!(is_unknown_command("/foo bar baz"));
+        assert!(is_unknown_command("/unknown argument"));
 
-        // Known commands should not trigger the unknown handler
-        let known = "/help";
-        // This would be matched by the explicit "/help" arm, not the catch-all
-        assert_eq!(known, "/help");
-
-        // Slash commands with spaces (like /model name) should not be caught by the
-        // simple slash check — they're handled by starts_with("/model ") etc.
-        let with_space = "/model claude-opus-4-6";
-        assert!(with_space.starts_with('/') && with_space.contains(' '));
+        // Known commands should NOT be flagged as unknown
+        assert!(!is_unknown_command("/help"));
+        assert!(!is_unknown_command("/quit"));
+        assert!(!is_unknown_command("/model"));
+        assert!(!is_unknown_command("/model claude-opus-4-6"));
+        assert!(!is_unknown_command("/save"));
+        assert!(!is_unknown_command("/save myfile.json"));
+        assert!(!is_unknown_command("/load"));
+        assert!(!is_unknown_command("/load myfile.json"));
+        assert!(!is_unknown_command("/config"));
     }
 
     #[test]
