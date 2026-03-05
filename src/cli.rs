@@ -216,6 +216,21 @@ fn load_config_file() -> HashMap<String, String> {
     HashMap::new()
 }
 
+/// Read the Anthropic API key from the environment, then remove it so child
+/// processes spawned by agent tools cannot inherit it.
+/// Returns None if no key is set or the key is empty.
+pub fn read_and_clear_api_key() -> Option<String> {
+    let key = std::env::var("ANTHROPIC_API_KEY")
+        .or_else(|_| std::env::var("API_KEY"))
+        .ok()
+        .filter(|k| !k.is_empty());
+    if key.is_some() {
+        std::env::remove_var("ANTHROPIC_API_KEY");
+        std::env::remove_var("API_KEY");
+    }
+    key
+}
+
 /// Parse CLI arguments into a Config, or exit with help/version.
 /// Returns None if --help or --version was handled (program should exit).
 pub fn parse_args(args: &[String]) -> Option<Config> {
@@ -266,9 +281,9 @@ pub fn parse_args(args: &[String]) -> Option<Config> {
         }
     }
 
-    let api_key = match std::env::var("ANTHROPIC_API_KEY").or_else(|_| std::env::var("API_KEY")) {
-        Ok(key) if !key.is_empty() => key,
-        _ => {
+    let api_key = match read_and_clear_api_key() {
+        Some(key) => key,
+        None => {
             eprintln!("{RED}error:{RESET} No API key found.");
             eprintln!("Set ANTHROPIC_API_KEY or API_KEY environment variable.");
             eprintln!("Example: ANTHROPIC_API_KEY=sk-ant-... cargo run");
@@ -389,6 +404,40 @@ pub fn parse_args(args: &[String]) -> Option<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Serialize env-mutating tests to avoid races (env vars are process-global).
+    static ENV_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.get_or_init(Default::default).lock().unwrap()
+    }
+
+    #[test]
+    fn test_api_key_removed_from_env_after_reading() {
+        let _g = env_lock();
+        std::env::remove_var("API_KEY");
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-test-removal-key");
+        let key = read_and_clear_api_key();
+        assert_eq!(key, Some("sk-ant-test-removal-key".to_string()));
+        assert_eq!(
+            std::env::var("ANTHROPIC_API_KEY"),
+            Err(std::env::VarError::NotPresent),
+            "API key should be removed from environment after being read"
+        );
+    }
+
+    #[test]
+    fn test_api_key_fallback_removed_from_env() {
+        let _g = env_lock();
+        std::env::remove_var("ANTHROPIC_API_KEY");
+        std::env::set_var("API_KEY", "sk-ant-test-fallback-key");
+        let key = read_and_clear_api_key();
+        assert_eq!(key, Some("sk-ant-test-fallback-key".to_string()));
+        assert_eq!(
+            std::env::var("API_KEY"),
+            Err(std::env::VarError::NotPresent),
+            "Fallback API_KEY should be removed from environment after being read"
+        );
+    }
 
     #[test]
     fn test_version_constant_exists() {

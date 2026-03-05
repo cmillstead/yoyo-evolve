@@ -1,7 +1,7 @@
 .DS_Store
 /target
-Cargo.lock
 ISSUES_TODAY.md
+yoyo-session.json
 ISSUE_RESPONSE.md
 /tmp/
 .worktrees/
