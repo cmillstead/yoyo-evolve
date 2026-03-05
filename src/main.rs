@@ -493,25 +493,23 @@ async fn main() {
                 continue;
             }
             "/compact" => {
-                let messages = agent.messages().to_vec();
-                let before = total_tokens(&messages);
+                let messages = agent.messages();
                 let before_count = messages.len();
-                let config = ContextConfig::default();
-                let compacted = compact_messages(messages, &config);
-                let after = total_tokens(&compacted);
-                let after_count = compacted.len();
-                agent.replace_messages(compacted);
-                if before == after {
-                    println!(
-                        "{DIM}  (nothing to compact — {before_count} messages, ~{} tokens){RESET}\n",
-                        format_token_count(before as u64)
-                    );
-                } else {
-                    println!(
-                        "{DIM}  compacted: {before_count} → {after_count} messages, ~{} → ~{} tokens{RESET}\n",
-                        format_token_count(before as u64),
-                        format_token_count(after as u64)
-                    );
+                let before_tokens = total_tokens(messages) as u64;
+                match compact_agent(&mut agent) {
+                    Some((_, _, after_count, after_tokens)) => {
+                        println!(
+                            "{DIM}  compacted: {before_count} → {after_count} messages, ~{} → ~{} tokens{RESET}\n",
+                            format_token_count(before_tokens),
+                            format_token_count(after_tokens)
+                        );
+                    }
+                    None => {
+                        println!(
+                            "{DIM}  (nothing to compact — {before_count} messages, ~{} tokens){RESET}\n",
+                            format_token_count(before_tokens)
+                        );
+                    }
                 }
                 continue;
             }
@@ -560,6 +558,24 @@ async fn main() {
     println!("\n{DIM}  bye 👋{RESET}\n");
 }
 
+/// Compact the agent's conversation and return (before_count, before_tokens, after_count, after_tokens).
+/// Returns None if nothing changed.
+fn compact_agent(agent: &mut Agent) -> Option<(usize, u64, usize, u64)> {
+    let messages = agent.messages().to_vec();
+    let before_tokens = total_tokens(&messages) as u64;
+    let before_count = messages.len();
+    let config = ContextConfig::default();
+    let compacted = compact_messages(messages, &config);
+    let after_tokens = total_tokens(&compacted) as u64;
+    let after_count = compacted.len();
+    agent.replace_messages(compacted);
+    if before_tokens == after_tokens {
+        None
+    } else {
+        Some((before_count, before_tokens, after_count, after_tokens))
+    }
+}
+
 /// Auto-compact conversation if context window usage exceeds threshold.
 fn auto_compact_if_needed(agent: &mut Agent) {
     let messages = agent.messages().to_vec();
@@ -567,17 +583,14 @@ fn auto_compact_if_needed(agent: &mut Agent) {
     let ratio = used as f64 / MAX_CONTEXT_TOKENS as f64;
 
     if ratio > AUTO_COMPACT_THRESHOLD {
-        let before_count = messages.len();
-        let config = ContextConfig::default();
-        let compacted = compact_messages(messages, &config);
-        let after = total_tokens(&compacted) as u64;
-        let after_count = compacted.len();
-        agent.replace_messages(compacted);
-        println!(
-            "{DIM}  ⚡ auto-compacted: {before_count} → {after_count} messages, ~{} → ~{} tokens{RESET}",
-            format_token_count(used),
-            format_token_count(after)
-        );
+        if let Some((before_count, before_tokens, after_count, after_tokens)) = compact_agent(agent)
+        {
+            println!(
+                "{DIM}  ⚡ auto-compacted: {before_count} → {after_count} messages, ~{} → ~{} tokens{RESET}",
+                format_token_count(before_tokens),
+                format_token_count(after_tokens)
+            );
+        }
     }
 }
 
