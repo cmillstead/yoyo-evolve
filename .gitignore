@@ -5,3 +5,4 @@ yoyo-session.json
 ISSUE_RESPONSE.md
 /tmp/
 .worktrees/
+.harness-verified
