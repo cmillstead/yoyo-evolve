@@ -84,7 +84,7 @@ if command -v gh &>/dev/null; then
     SELF_ISSUES=$(gh issue list --repo "$REPO" --state open \
         --label "agent-self" --limit 5 \
         --json number,title,body \
-        --jq '.[] | "[USER-SUBMITTED CONTENT BEGIN]\n### Issue #\(.number): \(.title)\n\(.body)\n[USER-SUBMITTED CONTENT END]\n"' 2>/dev/null || true)
+        --jq '.[] | "[USER-SUBMITTED CONTENT BEGIN]\n### Issue #\(.number): \(.title[0:100])\n\(.body[0:500])\n[USER-SUBMITTED CONTENT END]\n"' 2>/dev/null || true)
     if [ -n "$SELF_ISSUES" ]; then
         echo "  $(echo "$SELF_ISSUES" | grep -c '^### Issue') self-issues loaded."
     else
@@ -99,7 +99,7 @@ if command -v gh &>/dev/null; then
     HELP_ISSUES=$(gh issue list --repo "$REPO" --state open \
         --label "agent-help-wanted" --limit 5 \
         --json number,title,body,comments \
-        --jq '.[] | "[USER-SUBMITTED CONTENT BEGIN]\n### Issue #\(.number): \(.title)\n\(.body)\n\(if (.comments | length) > 0 then "⚠️ Human replied:\n" + (.comments | map(.body) | join("\n---\n")) else "No replies yet." end)\n[USER-SUBMITTED CONTENT END]\n"' 2>/dev/null || true)
+        --jq '.[] | "[USER-SUBMITTED CONTENT BEGIN]\n### Issue #\(.number): \(.title[0:100])\n\(.body[0:500])\n\(if (.comments | length) > 0 then "⚠️ Human replied:\n" + (.comments | map(.body[0:200]) | join("\n---\n")) else "No replies yet." end)\n[USER-SUBMITTED CONTENT END]\n"' 2>/dev/null || true)
     if [ -n "$HELP_ISSUES" ]; then
         echo "  $(echo "$HELP_ISSUES" | grep -c '^### Issue') help-wanted issues loaded."
     else
@@ -218,20 +218,18 @@ Now begin. Read IDENTITY.md first.
 PROMPT
 
 AGENT_LOG=$(mktemp)
+trap 'rm -f "$PROMPT_FILE" "$AGENT_LOG"' EXIT INT TERM
+
 ${TIMEOUT_CMD:+$TIMEOUT_CMD "$TIMEOUT"} cargo run -- \
     --model "$MODEL" \
     --skills ./skills \
     < "$PROMPT_FILE" 2>&1 | tee "$AGENT_LOG" || true
 
-rm -f "$PROMPT_FILE"
-
 # Exit early on API errors — GitHub Actions will handle retries
 if grep -q '"type":"error"' "$AGENT_LOG"; then
     echo "  API error detected. Exiting for retry."
-    rm -f "$AGENT_LOG"
     exit 1
 fi
-rm -f "$AGENT_LOG"
 
 echo ""
 echo "→ Session complete. Checking results..."
@@ -266,10 +264,12 @@ for FIX_ROUND in $(seq 1 $FIX_ATTEMPTS); do
     if [ "$FIX_ROUND" -lt "$FIX_ATTEMPTS" ]; then
         echo "  Build issues (attempt $FIX_ROUND/$FIX_ATTEMPTS) — running agent to fix..."
         FIX_PROMPT=$(mktemp)
+        ERRORS_FILE=$(mktemp)
+        printf '%s' "$ERRORS" > "$ERRORS_FILE"
         cat > "$FIX_PROMPT" <<FIXEOF
 Your code has errors. Fix them NOW. Do not add features — only fix these errors.
 
-$(echo -e "$ERRORS")
+Read the error output from: $ERRORS_FILE
 
 Steps:
 1. Read src/main.rs
@@ -282,7 +282,7 @@ FIXEOF
             --model "$MODEL" \
             --skills ./skills \
             < "$FIX_PROMPT" || true
-        rm -f "$FIX_PROMPT"
+        rm -f "$FIX_PROMPT" "$ERRORS_FILE"
     else
         echo "  Build: FAIL after $FIX_ATTEMPTS fix attempts — reverting to pre-session state"
         git checkout "$SESSION_START_SHA" -- src/
