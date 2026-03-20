@@ -17,7 +17,6 @@ Use tools proactively: read files to understand context, run commands to verify 
 After making changes, run tests or verify the result when appropriate."#;
 
 /// Parsed CLI configuration.
-#[allow(dead_code)]
 pub struct Config {
     pub model: String,
     pub api_key: String,

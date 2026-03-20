@@ -31,10 +31,39 @@ use prompt::*;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 use yoagent::agent::Agent;
 use yoagent::context::{compact_messages, total_tokens, ContextConfig};
-use yoagent::provider::AnthropicProvider;
+use yoagent::provider::{AnthropicProvider, ModelConfig, OpenAiCompat, OpenAiCompatProvider};
 use yoagent::tools::default_tools;
 use yoagent::*;
 
+/// Default base URLs for each provider.
+fn default_base_url(provider: &str) -> &str {
+    match provider {
+        "anthropic" => "https://api.anthropic.com",
+        "openrouter" => "https://openrouter.ai/api/v1",
+        "openai" => "https://api.openai.com/v1",
+        "ollama" => "http://localhost:11434/v1",
+        "groq" => "https://api.groq.com/openai/v1",
+        "deepseek" => "https://api.deepseek.com/v1",
+        "mistral" => "https://api.mistral.ai/v1",
+        "xai" => "https://api.x.ai/v1",
+        _ => "https://api.openai.com/v1",
+    }
+}
+
+/// Build an OpenAiCompat preset for the given provider name.
+fn compat_for_provider(provider: &str) -> OpenAiCompat {
+    match provider {
+        "openrouter" => OpenAiCompat::openrouter(),
+        "openai" => OpenAiCompat::openai(),
+        "groq" => OpenAiCompat::groq(),
+        "deepseek" => OpenAiCompat::deepseek(),
+        "mistral" => OpenAiCompat::mistral(),
+        "xai" => OpenAiCompat::xai(),
+        _ => OpenAiCompat::default(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn build_agent(
     model: &str,
     api_key: &str,
@@ -42,14 +71,37 @@ fn build_agent(
     system_prompt: &str,
     thinking: ThinkingLevel,
     max_tokens: Option<u32>,
+    provider: &str,
+    base_url: Option<&str>,
 ) -> Agent {
-    let mut agent = Agent::new(AnthropicProvider)
+    let mut agent = if provider == "anthropic" {
+        Agent::new(AnthropicProvider)
+    } else {
+        let url = base_url.unwrap_or_else(|| default_base_url(provider));
+        let model_config = ModelConfig {
+            id: model.to_string(),
+            name: model.to_string(),
+            api: yoagent::provider::ApiProtocol::OpenAiCompletions,
+            provider: provider.to_string(),
+            base_url: url.to_string(),
+            reasoning: thinking != ThinkingLevel::Off,
+            context_window: 200_000,
+            max_tokens: max_tokens.unwrap_or(8192),
+            cost: yoagent::provider::CostConfig::default(),
+            headers: std::collections::HashMap::new(),
+            compat: Some(compat_for_provider(provider)),
+        };
+        Agent::new(OpenAiCompatProvider).with_model_config(model_config)
+    };
+
+    agent = agent
         .with_system_prompt(system_prompt)
         .with_model(model)
         .with_api_key(api_key)
         .with_thinking(thinking)
         .with_skills(skills.clone())
         .with_tools(default_tools());
+
     if let Some(max) = max_tokens {
         agent = agent.with_max_tokens(max);
     }
@@ -78,6 +130,8 @@ async fn main() {
     let max_tokens = config.max_tokens;
     let continue_session = config.continue_session;
     let output_path = config.output_path;
+    let provider = config.provider;
+    let base_url = config.base_url;
 
     let mut agent = build_agent(
         &model,
@@ -86,6 +140,8 @@ async fn main() {
         &system_prompt,
         thinking,
         max_tokens,
+        &provider,
+        base_url.as_deref(),
     );
 
     // --continue / -c: resume last saved session
@@ -137,6 +193,12 @@ async fn main() {
 
     print_banner();
     println!("{DIM}  model: {model}{RESET}");
+    if provider != "anthropic" {
+        println!("{DIM}  provider: {provider}{RESET}");
+        if let Some(ref url) = base_url {
+            println!("{DIM}  base_url: {url}{RESET}");
+        }
+    }
     if thinking != ThinkingLevel::Off {
         println!("{DIM}  thinking: {thinking:?}{RESET}");
     }
@@ -275,6 +337,8 @@ async fn main() {
                     &system_prompt,
                     thinking,
                     max_tokens,
+                    &provider,
+                    base_url.as_deref(),
                 );
                 println!("{DIM}  (conversation cleared){RESET}\n");
                 continue;
@@ -299,6 +363,8 @@ async fn main() {
                     &system_prompt,
                     thinking,
                     max_tokens,
+                    &provider,
+                    base_url.as_deref(),
                 );
                 println!("{DIM}  (switched to {new_model}, conversation cleared){RESET}\n");
                 continue;
@@ -450,6 +516,10 @@ async fn main() {
             "/config" => {
                 println!("{DIM}  Configuration:");
                 println!("    model:      {model}");
+                println!("    provider:   {provider}");
+                if let Some(ref url) = base_url {
+                    println!("    base_url:   {url}");
+                }
                 println!(
                     "    thinking:   {}",
                     if thinking == ThinkingLevel::Off {
@@ -813,6 +883,38 @@ mod tests {
         assert!(!is_unknown_command("/config"));
         assert!(!is_unknown_command("/context"));
         assert!(!is_unknown_command("/version"));
+    }
+
+    #[test]
+    fn test_default_base_url_known_providers() {
+        let known = [
+            "anthropic",
+            "openrouter",
+            "openai",
+            "ollama",
+            "groq",
+            "deepseek",
+            "mistral",
+            "xai",
+        ];
+        for p in known {
+            let url = default_base_url(p);
+            assert!(
+                url.starts_with("http"),
+                "Provider {p} should have a valid URL, got: {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_default_base_url_unknown_provider() {
+        let url = default_base_url("foobar");
+        assert_eq!(url, "https://api.openai.com/v1");
+    }
+
+    #[test]
+    fn test_compat_for_provider_returns_defaults_for_unknown() {
+        let _compat = compat_for_provider("foobar");
     }
 
     #[test]
