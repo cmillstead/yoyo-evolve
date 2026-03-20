@@ -22,6 +22,9 @@ To run the agent interactively:
 ```bash
 ANTHROPIC_API_KEY=sk-... cargo run
 ANTHROPIC_API_KEY=sk-... cargo run -- --model claude-opus-4-6 --skills ./skills
+API_KEY=sk-or-... cargo run -- --provider openrouter --model anthropic/claude-sonnet-4
+API_KEY=... cargo run -- --provider openai --model gpt-4o
+cargo run -- --provider ollama --model llama3.1
 ```
 
 To trigger a full evolution cycle:
@@ -32,6 +35,8 @@ ANTHROPIC_API_KEY=sk-... ./scripts/evolve.sh
 ## Architecture
 
 **Single-file agent**: `src/main.rs` is the entire application — a REPL that uses `yoagent::Agent` with `AnthropicProvider`, `default_tools()`, and an optional `SkillSet`. It handles streaming `AgentEvent`s (tool execution, text deltas, agent end) and renders them with ANSI colors.
+
+**Providers**: Defaults to Anthropic. Use `--provider <name>` for OpenRouter, OpenAI, Ollama, Groq, DeepSeek, Mistral, or xAI. Any OpenAI-compatible API works with `--provider openai --base-url <url>`.
 
 **Evolution loop** (`scripts/evolve.sh`): Verifies build → fetches GitHub issues (via `gh` CLI + `scripts/format_issues.py`) → pipes a structured prompt into the agent → verifies build after changes → commits or reverts → posts issue responses → pushes.
 
