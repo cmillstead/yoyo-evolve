@@ -17,6 +17,7 @@ Use tools proactively: read files to understand context, run commands to verify 
 After making changes, run tests or verify the result when appropriate."#;
 
 /// Parsed CLI configuration.
+#[allow(dead_code)]
 pub struct Config {
     pub model: String,
     pub api_key: String,
@@ -27,6 +28,8 @@ pub struct Config {
     pub continue_session: bool,
     pub output_path: Option<String>,
     pub prompt_arg: Option<String>,
+    pub provider: String,
+    pub base_url: Option<String>,
 }
 
 /// Project context file names, checked in order. All found files are concatenated.
@@ -47,6 +50,9 @@ pub fn print_help() {
     println!("  --prompt, -p <t>  Run a single prompt and exit (no REPL)");
     println!("  --output, -o <f>  Write final response text to a file");
     println!("  --no-color        Disable colored output (also respects NO_COLOR env)");
+    println!("  --provider <name> Provider: anthropic (default), openrouter, openai, ollama,");
+    println!("                    groq, deepseek, mistral, xai");
+    println!("  --base-url <url>  Override API base URL for the provider");
     println!("  --continue, -c    Resume last saved session");
     println!("  --help, -h        Show this help message");
     println!("  --version, -V     Show version");
@@ -66,8 +72,9 @@ pub fn print_help() {
     println!("  /diff             Show git diff summary");
     println!();
     println!("Environment:");
-    println!("  ANTHROPIC_API_KEY  API key for Anthropic (required)");
+    println!("  ANTHROPIC_API_KEY  API key (required, or API_KEY)");
     println!("  API_KEY            Alternative env var for API key");
+    println!("  Note: ollama provider does not require an API key");
     println!();
     println!("Config files (searched in order, first found wins):");
     println!("  .yoyo.toml              Project-level config (current directory)");
@@ -259,6 +266,8 @@ pub fn parse_args(args: &[String]) -> Option<Config> {
         "-p",
         "--output",
         "-o",
+        "--provider",
+        "--base-url",
     ];
     for flag in &flags_needing_values {
         if let Some(pos) = args.iter().position(|a| a == flag) {
@@ -281,13 +290,25 @@ pub fn parse_args(args: &[String]) -> Option<Config> {
         }
     }
 
+    let provider = args
+        .iter()
+        .position(|a| a == "--provider")
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+        .or_else(|| file_config.get("provider").cloned())
+        .unwrap_or_else(|| "anthropic".into());
+
     let api_key = match read_and_clear_api_key() {
         Some(key) => key,
         None => {
-            eprintln!("{RED}error:{RESET} No API key found.");
-            eprintln!("Set ANTHROPIC_API_KEY or API_KEY environment variable.");
-            eprintln!("Example: ANTHROPIC_API_KEY=sk-ant-... cargo run");
-            std::process::exit(1);
+            if provider == "ollama" {
+                "ollama".to_string()
+            } else {
+                eprintln!("{RED}error:{RESET} No API key found.");
+                eprintln!("Set ANTHROPIC_API_KEY or API_KEY environment variable.");
+                eprintln!("Example: ANTHROPIC_API_KEY=sk-ant-... cargo run");
+                std::process::exit(1);
+            }
         }
     };
 
@@ -388,6 +409,13 @@ pub fn parse_args(args: &[String]) -> Option<Config> {
         .and_then(|i| args.get(i + 1))
         .cloned();
 
+    let base_url = args
+        .iter()
+        .position(|a| a == "--base-url")
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+        .or_else(|| file_config.get("base_url").cloned());
+
     Some(Config {
         model,
         api_key,
@@ -398,6 +426,8 @@ pub fn parse_args(args: &[String]) -> Option<Config> {
         continue_session,
         output_path,
         prompt_arg,
+        provider,
+        base_url,
     })
 }
 
@@ -711,6 +741,50 @@ thinking = "high"
             assert!(!name.is_empty());
             assert!(*lines > 0);
         }
+    }
+
+    #[test]
+    fn test_provider_flag_parsing() {
+        let args = [
+            "yoyo".to_string(),
+            "--provider".to_string(),
+            "openrouter".to_string(),
+        ];
+        let provider = args
+            .iter()
+            .position(|a| a == "--provider")
+            .and_then(|i| args.get(i + 1))
+            .cloned();
+        assert_eq!(provider, Some("openrouter".to_string()));
+    }
+
+    #[test]
+    fn test_base_url_flag_parsing() {
+        let args = [
+            "yoyo".to_string(),
+            "--base-url".to_string(),
+            "http://localhost:11434/v1".to_string(),
+        ];
+        let base_url = args
+            .iter()
+            .position(|a| a == "--base-url")
+            .and_then(|i| args.get(i + 1))
+            .cloned();
+        assert_eq!(base_url, Some("http://localhost:11434/v1".to_string()));
+    }
+
+    #[test]
+    fn test_provider_config_file() {
+        let content = r#"
+provider = "openrouter"
+base_url = "https://openrouter.ai/api/v1"
+"#;
+        let config = parse_config_file(content);
+        assert_eq!(config.get("provider").unwrap(), "openrouter");
+        assert_eq!(
+            config.get("base_url").unwrap(),
+            "https://openrouter.ai/api/v1"
+        );
     }
 
     #[test]
