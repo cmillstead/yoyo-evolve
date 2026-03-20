@@ -50,6 +50,9 @@ jobs:
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          API_KEY: ${{ secrets.API_KEY }}
+          PROVIDER: ${{ vars.PROVIDER || 'anthropic' }}
+          BASE_URL: ${{ vars.BASE_URL || '' }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -62,6 +65,9 @@ jobs:
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          API_KEY: ${{ secrets.API_KEY }}
+          PROVIDER: ${{ vars.PROVIDER || 'anthropic' }}
+          BASE_URL: ${{ vars.BASE_URL || '' }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -73,6 +79,9 @@ jobs:
         if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          API_KEY: ${{ secrets.API_KEY }}
+          PROVIDER: ${{ vars.PROVIDER || 'anthropic' }}
+          BASE_URL: ${{ vars.BASE_URL || '' }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

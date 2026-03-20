@@ -5,16 +5,21 @@
 #   ANTHROPIC_API_KEY=sk-... ./scripts/evolve.sh
 #
 # Environment:
-#   ANTHROPIC_API_KEY  — required
-#   REPO               — GitHub repo (default: yologdev/yoyo-evolve)
-#   MODEL              — LLM model (default: claude-opus-4-6)
-#   TIMEOUT            — Max session time in seconds (default: 3600)
+#   ANTHROPIC_API_KEY  - API key (required unless PROVIDER=ollama)
+#   API_KEY            - alternative API key env var
+#   REPO               - GitHub repo (default: yologdev/yoyo-evolve)
+#   MODEL              - LLM model (default: claude-opus-4-6)
+#   PROVIDER           - API provider (default: anthropic)
+#   BASE_URL           - Override base URL for the provider
+#   TIMEOUT            - Max session time in seconds (default: 3600)
 
 set -euo pipefail
 
 REPO="${REPO:-yologdev/yoyo-evolve}"
 MODEL="${MODEL:-claude-opus-4-6}"
 TIMEOUT="${TIMEOUT:-3600}"
+PROVIDER="${PROVIDER:-anthropic}"
+BASE_URL="${BASE_URL:-}"
 BIRTH_DATE="2026-02-28"
 DATE=$(date +%Y-%m-%d)
 SESSION_TIME=$(date +%H:%M)
@@ -123,6 +128,11 @@ if ! command -v timeout &>/dev/null; then
     fi
 fi
 
+PROVIDER_FLAGS="--provider $PROVIDER"
+if [ -n "$BASE_URL" ]; then
+    PROVIDER_FLAGS="$PROVIDER_FLAGS --base-url $BASE_URL"
+fi
+
 PROMPT_FILE=$(mktemp)
 cat > "$PROMPT_FILE" <<PROMPT
 Today is Day $DAY ($DATE $SESSION_TIME).
@@ -223,6 +233,7 @@ trap 'rm -f "$PROMPT_FILE" "$AGENT_LOG"' EXIT INT TERM
 ${TIMEOUT_CMD:+$TIMEOUT_CMD "$TIMEOUT"} cargo run -- \
     --model "$MODEL" \
     --skills ./skills \
+    $PROVIDER_FLAGS \
     < "$PROMPT_FILE" 2>&1 | tee "$AGENT_LOG" || true
 
 # Exit early on API errors — GitHub Actions will handle retries
@@ -281,6 +292,7 @@ FIXEOF
         ${TIMEOUT_CMD:+$TIMEOUT_CMD 300} cargo run -- \
             --model "$MODEL" \
             --skills ./skills \
+            $PROVIDER_FLAGS \
             < "$FIX_PROMPT" || true
         rm -f "$FIX_PROMPT" "$ERRORS_FILE"
     else
@@ -320,6 +332,7 @@ JEOF
     ${TIMEOUT_CMD:+$TIMEOUT_CMD 120} cargo run -- \
         --model "$MODEL" \
         --skills ./skills \
+        $PROVIDER_FLAGS \
         < "$JOURNAL_PROMPT" || true
     rm -f "$JOURNAL_PROMPT"
 
